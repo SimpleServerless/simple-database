@@ -1,0 +1,108 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: "Simple serverless database configuration"
+
+Parameters:
+  StageName:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - prod
+      - local
+      - stage
+    Description: The environment to be run on (typically local, dev, stage or prod)
+
+  VpcId:
+    Type: AWS::SSM::Parameter::Value<String>
+    Default: VpcId
+
+
+Mappings:
+  Environment:
+    dev:
+      "VpcSubnetIds": ["","",]
+      "DBClusterIdentifier": "simple-serverless-aurora-serverless-development"
+      "DBName": "simple_serverless_dev"
+      "DBSubnetGroupName": "default" # WARNING: these are public subnets don't do this for data that needs to be secure.
+      "BackupRetentionPeriod": 1
+      "DBInstancePrimaryIdentifier": "simple-severless-primary-development"
+      "BastionSgID" : "sg-004e26e393023eef8"
+
+Conditions:
+  IsProdCondition:
+    !Equals [!Ref StageName, prod]
+
+Resources:
+
+  # Create a security group to be used by anything accessing this DB
+  AppSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: SimpleServerlessSG
+      VpcId: !Ref VpcId
+      GroupDescription: Simple service lambda security group
+
+  # Create the security group to be used by this DB
+  DBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: SimpleServerlessDBSG
+      VpcId: !Ref VpcId
+      GroupDescription: Simple service db security group
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          FromPort: 0
+          ToPort: 65535
+          CidrIp: 0.0.0.0/0
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          SourceSecurityGroupId: !GetAtt AppSecurityGroup.GroupId
+        - IpProtocol: tcp
+          FromPort: 5432
+          ToPort: 5432
+          SourceSecurityGroupId: !FindInMap [Environment, !Ref StageName, BastionSgID]
+    DependsOn: AppSecurityGroup
+
+  DatabaseServlerless:
+    Type: AWS::RDS::DBCluster
+    # If this entire CloudFormation stack is deleted make a snapshot first.
+    DeletionPolicy: Snapshot
+    Properties:
+      DBClusterIdentifier: !FindInMap [Environment, !Ref StageName, DBClusterIdentifier]
+      Engine: aurora-postgresql
+      EngineMode: serverless
+      EngineVersion: '10.7'
+      EnableHttpEndpoint: true
+      StorageEncrypted: true
+      DatabaseName: {"Fn::FindInMap": [ "Environment", { "Ref": "StageName" }, "DBName"]}
+      # IMPORTANT: If copying this template don't re-user these secretmanager values for your project
+      MasterUsername: '{{resolve:secretsmanager:simple-serverless/db-credentials:SecretString:username}}'
+      MasterUserPassword: '{{resolve:secretsmanager:simple-serverless/db-credentials:SecretString:password}}'
+      BackupRetentionPeriod: !FindInMap [Environment, !Ref StageName, BackupRetentionPeriod]
+      DeletionProtection: true
+      DBSubnetGroupName: !FindInMap [Environment, !Ref StageName, DBSubnetGroupName]
+      VpcSecurityGroupIds:
+        - !Ref DBSecurityGroup
+      ScalingConfiguration:
+        MaxCapacity: 2
+        MinCapacity: 2
+        AutoPause: !If [IsProdCondition, false, true ]
+        SecondsUntilAutoPause: 3600
+
+
+Outputs:
+  SimpleSSHost:
+    Value: !GetAtt DatabaseServlerless.Endpoint.Address
+    Export:
+      Name: !Sub '${AWS::StackName}-Host'
+  SimpleSSName:
+    Value: !FindInMap [Environment, !Ref StageName, DBName]
+    Export:
+      Name: !Sub '${AWS::StackName}-Name'
+  SimpleSSAppSecurityGroupId:
+    Value: !GetAtt AppSecurityGroup.GroupId
+    Export:
+      Name: !Sub '${AWS::StackName}-AppSGId'
