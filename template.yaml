@@ -21,10 +21,9 @@ Parameters:
 Mappings:
   Environment:
     dev:
-      "VpcSubnetIds": ["","",]
       "DBClusterIdentifier": "simple-serverless-aurora-serverless-development"
       "DBName": "simple_serverless_dev"
-      "DBSubnetGroupName": "default" # WARNING: these are public subnets don't do this for data that needs to be secure.
+      "DBSubnetGroupName": "private"
       "BackupRetentionPeriod": 1
       "DBInstancePrimaryIdentifier": "simple-severless-primary-development"
       "BastionSgID" : "sg-004e26e393023eef8"
