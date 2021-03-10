@@ -15,7 +15,7 @@ CREATE TABLE programs
 CREATE TABLE students
 (
     student_uuid uuid primary key,
-    student_id SERIAL,
+    student_id SERIAL UNIQUE,
     first_name varchar(100) NOT NULL,
     last_name varchar(100) NOT NULL,
     status varchar(30),
