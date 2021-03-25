@@ -13,24 +13,18 @@ Parameters:
       - stage
     Description: The environment to be run on (typically local, dev, stage or prod)
 
-  VpcId:
-    Type: AWS::SSM::Parameter::Value<String>
-    Default: VpcId
-
 
 Mappings:
   Environment:
     dev:
       "DBClusterIdentifier": "simple-serverless-aurora-serverless-development"
       "DBName": "simple_serverless_dev"
-      "DBSubnetGroupName": "private"
       "BackupRetentionPeriod": 1
       "DBInstancePrimaryIdentifier": "simple-severless-primary-development"
 
     prod:
       "DBClusterIdentifier": "simple-serverless-aurora-serverless-production"
       "DBName": "simple_serverless_prod"
-      "DBSubnetGroupName": "private"
       "BackupRetentionPeriod": 1
       "DBInstancePrimaryIdentifier": "simple-severless-primary-production"
 
@@ -46,7 +40,7 @@ Resources:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupName: SimpleServerlessSG
-      VpcId: !Ref VpcId
+      VpcId: '{{resolve:ssm:VpcId:1}}'
       GroupDescription: Simple service lambda security group
 
   # Create the security group to be used by this DB
@@ -54,7 +48,7 @@ Resources:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupName: SimpleServerlessDBSG
-      VpcId: !Ref VpcId
+      VpcId: '{{resolve:ssm:VpcId:1}}'
       GroupDescription: Simple service db security group
       SecurityGroupEgress:
         - IpProtocol: -1
@@ -74,6 +68,18 @@ Resources:
           SourceSecurityGroupId: !ImportValue BastionSG
     DependsOn: AppSecurityGroup
 
+  DBSubnetGroup:
+    Properties:
+      DBSubnetGroupDescription: All private subnets
+      SubnetIds:
+        - '{{resolve:ssm:private-subnet-1:1}}'
+        - '{{resolve:ssm:private-subnet-2:1}}'
+        - '{{resolve:ssm:private-subnet-3:1}}'
+      Tags:
+        - Key: Name
+          Value: SimpleServerlessDBSubnetGroup
+    Type: "AWS::RDS::DBSubnetGroup"
+
   DatabaseServlerless:
     Type: AWS::RDS::DBCluster
     # If this entire CloudFormation stack is deleted make a snapshot first.
@@ -90,8 +96,8 @@ Resources:
       MasterUsername: '{{resolve:secretsmanager:simple-serverless/db-credentials:SecretString:username}}'
       MasterUserPassword: '{{resolve:secretsmanager:simple-serverless/db-credentials:SecretString:password}}'
       BackupRetentionPeriod: !FindInMap [Environment, !Ref StageName, BackupRetentionPeriod]
-      DeletionProtection: true
-      DBSubnetGroupName: !FindInMap [Environment, !Ref StageName, DBSubnetGroupName]
+      DeletionProtection: false # Should always be true in production
+      DBSubnetGroupName: !Ref DBSubnetGroup
       VpcSecurityGroupIds:
         - !Ref DBSecurityGroup
       ScalingConfiguration:

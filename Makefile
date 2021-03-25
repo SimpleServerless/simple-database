@@ -39,4 +39,9 @@ deploy: print-stage build package
 	--parameter-overrides StageName=$(STAGE)
 
 
+# You will delete the database and lose your data
+delete-stack:
+	aws cloudformation delete-stack --stack-name $(STACK_NAME)
+
+
 .PHONY : package

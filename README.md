@@ -3,7 +3,7 @@ If you're getting started on simple serverless CRUD API one of the more common b
 realational database set up on your VPC. Also RDS in AWS can get expensive even if you provision the smallest server possible.
 This project contains a template.yaml file and Makefile that provides everyting you need to deploy a relational
 database to your VPC and keep your costs down as you prototype a serverless API. This project was also created to set up
-a database to be used by [Database Connections: Lesson 3](https://github.com/SimpleServerless/simple-db-connection) in 
+a database to be used by [Database Connections: Lesson 6](https://github.com/SimpleServerless/simple-db-connection) in 
 the Simple Serverless series.
 
 This project assumes a typical VPC configuration with private subnets, and security groups to control access.
