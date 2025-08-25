@@ -87,8 +87,9 @@ Resources:
     Properties:
       DBClusterIdentifier: !FindInMap [Environment, !Ref StageName, DBClusterIdentifier]
       Engine: aurora-postgresql
-      EngineMode: serverless
-      EngineVersion: '10.7'
+      EngineMode: provisioned
+      EngineVersion: '17.4'
+      Port: 5432
       EnableHttpEndpoint: true
       StorageEncrypted: true
       DatabaseName: {"Fn::FindInMap": [ "Environment", { "Ref": "StageName" }, "DBName"]}
@@ -100,12 +101,49 @@ Resources:
       DBSubnetGroupName: !Ref DBSubnetGroup
       VpcSecurityGroupIds:
         - !Ref DBSecurityGroup
-      ScalingConfiguration:
+      ServerlessV2ScalingConfiguration:
+        MinCapacity: 0
         MaxCapacity: 2
-        MinCapacity: 2
-        AutoPause: !If [IsProdCondition, false, true ]
-        SecondsUntilAutoPause: 3600
 
+  DatabaseInstance:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBClusterIdentifier: !Ref DatabaseServlerless
+      DBInstanceIdentifier: !FindInMap [Environment, !Ref StageName, DBInstancePrimaryIdentifier]
+      Engine: aurora-postgresql
+      DBInstanceClass: db.serverless
+      PubliclyAccessible: false
+
+  # This is needed to allow the lambda to access the secretsmanager for credentials
+  VPCEndpointSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: SimpleServerlessVPCEndpointSG
+      VpcId: !Sub '{{resolve:ssm:VpcId}}'
+      GroupDescription: Security group for VPC Endpoints
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          SourceSecurityGroupId: !GetAtt AppSecurityGroup.GroupId
+      Tags:
+        - Key: Name
+          Value: SimpleServerlessVPCEndpointSG
+
+  SecretsManagerVPCEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.secretsmanager
+      VpcId: !Sub '{{resolve:ssm:VpcId}}'
+      VpcEndpointType: Interface
+      SubnetIds:
+        - !Sub '{{resolve:ssm:private-subnet-1}}'
+        - !Sub '{{resolve:ssm:private-subnet-2}}'
+        - !Sub '{{resolve:ssm:private-subnet-3}}'
+      SecurityGroupIds:
+        - !Ref VPCEndpointSecurityGroup
+      PrivateDnsEnabled: true
+    DependsOn: VPCEndpointSecurityGroup
 
 Outputs:
   SimpleSSHost:
